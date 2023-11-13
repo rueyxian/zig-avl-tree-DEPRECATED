@@ -40,14 +40,14 @@ pub fn AvlTree(comptime K: type, comptime V: type, comptime order_fn: fn (K, K) 
         allocator: Allocator,
         unmanaged: Unmanaged,
 
-        const Self = @This();
+        pub const Self = @This();
         const Unmanaged = AvlTreeUnmanaged(K, V, order_fn);
-        const Size = Unmanaged.Size;
-        const Index = Unmanaged.Index;
+        pub const Size = Unmanaged.Size;
+        pub const Index = Unmanaged.Index;
         const Node = Unmanaged.Node;
 
-        const KV = Unmanaged.KV;
-        const GetOrPutResult = Unmanaged.GetOrPutResult;
+        pub const KV = Unmanaged.KV;
+        pub const GetOrPutResult = Unmanaged.GetOrPutResult;
 
         pub fn init(allocator: Allocator) !Self {
             return Self{
@@ -62,6 +62,30 @@ pub fn AvlTree(comptime K: type, comptime V: type, comptime order_fn: fn (K, K) 
 
         pub fn deinit(self: *Self) void {
             self.unmanaged.deinit(self.allocator);
+        }
+
+        pub fn clear_retaining_capacity(self: *Self) void {
+            self.unmanaged.clear_retaining_capacity();
+        }
+
+        pub fn clear_and_free(self: *Self) void {
+            self.unmanaged.clear_and_free(self.allocator);
+        }
+
+        pub fn ensure_total_capacity(self: *Self, new_capacity: Size) !void {
+            return self.unmanaged.ensure_total_capacity(self.allocator, new_capacity);
+        }
+
+        pub fn ensure_total_capacity_precise(self: *Self, new_capacity: Size) !void {
+            return self.unmanaged.ensure_total_capacity_precise(self.allocator, new_capacity);
+        }
+
+        pub fn ensure_unused_capacity(self: *Self, additional_count: Size) !void {
+            return self.unmanaged.ensure_unused_capacity(self.allocator, additional_count);
+        }
+
+        pub fn capacity(self: *Self) Size {
+            return self.unmanaged.capacity();
         }
 
         pub fn count(self: *Self) Size {
@@ -84,24 +108,40 @@ pub fn AvlTree(comptime K: type, comptime V: type, comptime order_fn: fn (K, K) 
             return self.unmanaged.get_or_put(self.allocator, key);
         }
 
-        pub fn put_no_clobber(self: *Self, key: K, value: V) !void {
-            return self.unmanaged.put_no_clobber(self.allocator, key, value);
-        }
-
-        pub fn fetch_put(self: *Self, key: K, value: V) !?V {
-            return self.unmanaged.fetch_put(self.allocator, key, value);
+        pub fn get_or_put_assume_capacity(self: *Self, key: K) !GetOrPutResult {
+            return self.unmanaged.get_or_put_assume_capacity(self.allocator, key);
         }
 
         pub fn put(self: *Self, key: K, value: V) !void {
             return self.unmanaged.put(self.allocator, key, value);
         }
 
-        pub fn fetch_remove(self: *Self, key: K) ?V {
-            return self.unmanaged.fetch_remove(key);
+        pub fn put_assume_capacity(self: *Self, key: K, value: V) !void {
+            return self.unmanaged.put_assume_capacity(self.allocator, key, value);
+        }
+
+        pub fn put_no_clobber(self: *Self, key: K, value: V) !void {
+            return self.unmanaged.put_no_clobber(self.allocator, key, value);
+        }
+
+        pub fn put_assume_capacity_no_clobber(self: *Self, key: K, value: V) !void {
+            return self.unmanaged.put_assume_capacity_no_clobber(self.allocator, key, value);
+        }
+
+        pub fn fetch_put(self: *Self, key: K, value: V) !?V {
+            return self.unmanaged.fetch_put(self.allocator, key, value);
+        }
+
+        pub fn fetch_put_assume_capacity(self: *Self, key: K, value: V) !?V {
+            return self.unmanaged.fetch_put_assume_capacity(self.allocator, key, value);
         }
 
         pub fn remove(self: *Self, key: K) bool {
             return self.unmanaged.remove(key);
+        }
+
+        pub fn fetch_remove(self: *Self, key: K) ?V {
+            return self.unmanaged.fetch_remove(key);
         }
 
         pub fn clone(self: *const Self) !Self {
@@ -116,8 +156,8 @@ pub fn AvlTree(comptime K: type, comptime V: type, comptime order_fn: fn (K, K) 
             return self.unmanaged.to_owned_slice(self.allocator);
         }
 
-        fn walk(self: *Self) void {
-            self.unmanaged.walk();
+        fn debug_walk(self: *Self) void {
+            self.unmanaged.debug_walk();
         }
     };
 }
@@ -128,10 +168,10 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
         root: ?Index = null,
         size: Size = 0,
 
-        const Self = @This();
+        pub const Self = @This();
 
-        const Size = u32;
-        const Index = Size;
+        pub const Size = u32;
+        pub const Index = Size;
 
         fn update_height(index: Index, arena: *Arena) void {
             var n = arena.get_node(index);
@@ -171,11 +211,9 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
                 2 => .right,
                 else => return,
             };
-
             var sub_index = get_child_index_ptr(index, arena, heavy).*.?;
             var sub_bf = balance_factor(sub_index, arena);
             assert(sub_bf >= -1 and sub_bf <= 1);
-
             if ((sub_bf == -1 and heavy == .right) or (sub_bf == 1 and heavy == .left)) {
                 rotate(sub_index, arena, heavy);
             }
@@ -246,12 +284,12 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
             }
         };
 
-        const KV = struct {
+        pub const KV = struct {
             key: K,
             value: V,
         };
 
-        const GetOrPutResult = struct {
+        pub const GetOrPutResult = struct {
             value_ptr: *V,
             found_existing: bool,
         };
@@ -263,6 +301,37 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
 
         pub fn deinit(self: *Self, allocator: Allocator) void {
             self.arena.m.deinit(allocator);
+        }
+
+        pub fn clear_retaining_capacity(self: *Self) void {
+            self.arena.m.clearRetainingCapacity();
+            self.arena.free_head = null;
+            self.root = null;
+            self.size = 0;
+        }
+
+        pub fn clear_and_free(self: *Self, allocator: Allocator) void {
+            self.arena.m.clearAndFree(allocator);
+            self.arena.free_head = null;
+            self.root = null;
+            self.size = 0;
+        }
+
+        pub fn ensure_total_capacity(self: *Self, allocator: Allocator, new_capacity: Size) !void {
+            return self.arena.m.ensureTotalCapacity(allocator, new_capacity);
+        }
+
+        pub fn ensure_total_capacity_precise(self: *Self, allocator: Allocator, new_capacity: Size) !void {
+            return self.arena.m.ensureTotalCapacityPrecise(allocator, new_capacity);
+        }
+
+        pub fn ensure_unused_capacity(self: *Self, allocator: Allocator, additional_count: Size) !void {
+            const new_capacity = self.count() + additional_count;
+            return self.ensure_total_capacity(allocator, new_capacity);
+        }
+
+        pub fn capacity(self: *Self) Size {
+            return @as(Size, @intCast(self.arena.m.capacity));
         }
 
         pub fn count(self: *Self) Index {
@@ -278,12 +347,8 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
             while (index) |idx| {
                 var node = self.arena.get_node(idx);
                 switch (order_fn(key, node.key)) {
-                    .lt => {
-                        index = node.left;
-                    },
-                    .gt => {
-                        index = node.right;
-                    },
+                    .lt => index = node.left,
+                    .gt => index = node.right,
                     .eq => return &node.value,
                 }
             }
@@ -329,10 +394,30 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
             return GetOrPutResult{ .value_ptr = &e.node_ptr.value, .found_existing = false };
         }
 
+        pub fn get_or_put_assume_capacity(self: *Self, allocator: Allocator, key: K) !GetOrPutResult {
+            assert(self.capacity() - self.count() > 0);
+            return self.get_or_put(allocator, key);
+        }
+
+        pub fn put(self: *Self, allocator: Allocator, key: K, value: V) !void {
+            var gop = try self.get_or_put(allocator, key);
+            gop.value_ptr.* = value;
+        }
+
+        pub fn put_assume_capacity(self: *Self, allocator: Allocator, key: K, value: V) !void {
+            assert(self.capacity() - self.count() > 0);
+            return self.put(allocator, key, value);
+        }
+
         pub fn put_no_clobber(self: *Self, allocator: Allocator, key: K, value: V) !void {
             var gop = try self.get_or_put(allocator, key);
             assert(!gop.found_existing);
             gop.value_ptr.* = value;
+        }
+
+        pub fn put_assume_capacity_no_clobber(self: *Self, allocator: Allocator, key: K, value: V) !void {
+            assert(self.capacity() - self.count() > 0);
+            return self.put_no_clobber(allocator, key, value);
         }
 
         pub fn fetch_put(self: *Self, allocator: Allocator, key: K, value: V) !?V {
@@ -342,13 +427,17 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
             return null;
         }
 
-        pub fn put(self: *Self, allocator: Allocator, key: K, value: V) !void {
-            var gop = try self.get_or_put(allocator, key);
-            gop.value_ptr.* = value;
+        pub fn fetch_put_assume_capacity(self: *Self, allocator: Allocator, key: K, value: V) !?V {
+            assert(self.capacity() - self.count() > 0);
+            return self.fetch_put(allocator, key, value);
         }
 
         pub fn fetch_remove(self: *Self, key: K) ?V {
             return self._fetch_remove(&self.root, key);
+        }
+
+        pub fn remove(self: *Self, key: K) bool {
+            return self.fetch_remove(key) != null;
         }
 
         fn _fetch_remove(self: *Self, index: *?Index, key: K) ?V {
@@ -394,10 +483,6 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
             return node.value;
         }
 
-        pub fn remove(self: *Self, key: K) bool {
-            return self.fetch_remove(key) != null;
-        }
-
         pub fn clone(self: *const Self, allocator: Allocator) !Self {
             const arena = Arena{
                 .m = try self.arena.m.clone(allocator),
@@ -425,18 +510,18 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
             try _to_owned_slice(allocator, arena, m, n.right);
         }
 
-        fn walk(self: *Self) void {
-            self._walk(self.root);
+        fn debug_walk(self: *Self) void {
+            self._debug_walk(self.root);
         }
 
-        fn _walk(self: *Self, index: ?Index) void {
+        fn _debug_walk(self: *Self, index: ?Index) void {
             const idx = index orelse return;
             const node = self.arena.get_node(idx);
-            self._walk(node.left);
+            self._debug_walk(node.left);
 
             print("{{ ", .{});
             print("key: {any}, ", .{node.key});
-            print("val: {any}, ", .{node.value});
+            // print("val: {any}, ", .{node.value});
 
             if (node.left) |i| {
                 print("l: {}, ", .{self.arena.get_node(i).key});
@@ -451,33 +536,91 @@ pub fn AvlTreeUnmanaged(comptime K: type, comptime V: type, comptime order_fn: f
             }
 
             print(" }}\n", .{});
-            self._walk(node.right);
+            self._debug_walk(node.right);
         }
     };
 }
 
-test "basic" {
+test "basic example" {
     // if (true) return error.SkipZigTest;
 
     const allocator: Allocator = testing.allocator;
 
-    var tree = AvlTreeUnmanaged(i32, u8, asc(i32)){};
-    defer tree.deinit(allocator);
+    var tree = try AvlTree(u32, []const u8, asc(u32)).init(allocator);
+    try tree.put_no_clobber(6, "six");
+    try tree.put_no_clobber(12, "twelve");
+    try tree.put_no_clobber(7, "seven");
+    try tree.put_no_clobber(8, "eight");
+    try tree.put_no_clobber(33, "thirty-three");
+    try tree.put_no_clobber(42, "fourty-two");
+    try tree.put_no_clobber(99, "ninety-nine");
+    try tree.put_no_clobber(21, "twenty-one");
+    try tree.put_no_clobber(4, "four");
+    try tree.put_no_clobber(5, "five");
+    _ = tree.remove(6);
+    _ = tree.remove(33);
+    _ = tree.remove(99);
+    try tree.put_no_clobber(1, "one");
+    try tree.put_no_clobber(2, "two");
+    _ = tree.remove(12);
+    _ = tree.remove(8);
+    _ = tree.remove(1);
 
-    _ = try tree.put(allocator, 6, 'a');
-    _ = try tree.put(allocator, 2, 'b');
-    _ = try tree.put(allocator, 11, 'c');
-    _ = try tree.put(allocator, 11, 'd');
-    _ = try tree.put(allocator, 8, 'e');
-    _ = try tree.put(allocator, 20, 'f');
-    _ = try tree.put(allocator, 6, 'g');
+    const slice = try tree.to_owned_slice();
+    defer allocator.free(slice);
 
-    try testing.expect(tree.count() == 5);
-    try testing.expect(tree.get(6) == 'g');
-    try testing.expect(tree.get(2) == 'b');
-    try testing.expect(tree.get(11) == 'd');
-    try testing.expect(tree.get(8) == 'e');
-    try testing.expect(tree.get(20) == 'f');
+    const expect = [_][]const u8{ "two", "four", "five", "seven", "twenty-one", "fourty-two" };
+    for (slice, 0..) |kv, i| {
+        try testing.expectEqualSlices(u8, kv.value, expect[i]);
+    }
+}
+
+test "count and capacity" {
+    // if (true) return error.SkipZigTest;
+
+    const allocator: Allocator = testing.allocator;
+
+    var tree = try AvlTree(i32, void, asc(i32)).init(allocator);
+    defer tree.deinit();
+
+    try testing.expect(tree.count() == 0);
+    try testing.expect(tree.capacity() == 0);
+
+    try tree.ensure_total_capacity_precise(4);
+
+    try testing.expect(tree.count() == 0);
+    try testing.expect(tree.capacity() == 4);
+
+    _ = try tree.put_assume_capacity_no_clobber(42, {});
+    _ = try tree.put_assume_capacity_no_clobber(99, {});
+    _ = try tree.put_assume_capacity_no_clobber(123, {});
+    _ = try tree.put_assume_capacity_no_clobber(66, {});
+
+    try testing.expect(tree.count() == 4);
+    try testing.expect(tree.capacity() == 4);
+
+    try tree.ensure_unused_capacity(2);
+    _ = try tree.put_assume_capacity_no_clobber(33, {});
+    _ = try tree.put_assume_capacity_no_clobber(77, {});
+
+    try testing.expect(tree.count() == 6);
+    try testing.expect(tree.capacity() == 14);
+
+    tree.clear_retaining_capacity();
+
+    try testing.expect(tree.count() == 0);
+    try testing.expect(tree.capacity() == 14);
+
+    _ = try tree.put_assume_capacity_no_clobber(11, {});
+    _ = try tree.put_assume_capacity_no_clobber(22, {});
+
+    try testing.expect(tree.count() == 2);
+    try testing.expect(tree.capacity() == 14);
+
+    tree.clear_and_free();
+
+    try testing.expect(tree.count() == 0);
+    try testing.expect(tree.capacity() == 0);
 }
 
 test "duplicated key" {
@@ -508,7 +651,7 @@ test "duplicated key" {
     try testing.expect(tree.count() == 7);
 }
 
-test "example random" {
+test "random" {
     // if (true) return error.SkipZigTest;
 
     const Rand = struct {
